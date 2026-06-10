@@ -27,6 +27,25 @@ Planned scope (per the brainstorm):
   regression test.
 - **Conformance vectors** — golden proto exchanges both stacks validate against.
 
+## Roadmap
+
+Cross-stack tooling — its job is to let the app and firmware exercise each other
+without a Jetson, so it tracks the system arc one step behind: it can only
+emulate a phase once the wire shape exists in
+[`sst-cam-proto`](https://github.com/ScoutSportTechnology/sst-cam-proto).
+
+| Phase | Goal | Status |
+| ----- | ---- | ------ |
+| 0 | **Requirements** — scope, boundaries, decisions | ✅ done ([brainstorm](docs/brainstorms/2026-06-09-cross-stack-emulator-requirements.md)) |
+| 1 | **Bridge daemon** — route `ChunkedPayload` frames app ↔ emulated firmware over a local socket; emulate discovery + device identity | ⬜ not started |
+| 2 | **Fault injection** — latency, dropped/duplicated chunks, mid-transfer disconnect, forced MTU/version skew | ⬜ not started |
+| 3 | **Record / replay** — capture a frame exchange, replay it as a regression test | ⬜ not started |
+| 4 | **Conformance vectors** — golden proto exchanges both stacks validate against | ⬜ not started |
+
+This repo owns the bridge only. The two halves it connects live elsewhere: the
+emulated firmware is a **build variant of `sst-cam-firmware`**, and the app's
+socket backend lives in **`sst-cam-app`** — both tracked in those repos.
+
 ## Related repos
 
 - [`sst-cam-app`](https://github.com/ScoutSportTechnology/sst-cam-app) — Flutter app; gains a socket `BleService` backend.
