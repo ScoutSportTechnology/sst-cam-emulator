@@ -46,6 +46,36 @@ This repo owns the bridge only. The two halves it connects live elsewhere: the
 emulated firmware is a **build variant of `sst-cam-firmware`**, and the app's
 socket backend lives in **`sst-cam-app`** — both tracked in those repos.
 
+## CI/CD & releasing
+
+This repo follows the shared SST workflow standard (same branch model, maturity
+ladder, and tag scheme as `sst-cam-app`, `sst-cam-firmware`, and `sst-cam-proto`).
+
+**Branch flow:** `feat/* | fix/*` → `develop` → `release/X.Y.Z` → `main`.
+
+**Maturity ladder** (tags `vX.Y.Z[-alpha.N|-beta.N]`):
+
+| Rung | Tag | Meaning | Minted on |
+| ---- | --- | ------- | --------- |
+| alpha | `vX.Y.Z-alpha.N` | build + automated tests in isolation | push to `develop` |
+| beta | `vX.Y.Z-beta.N` | fidelity as a firmware stand-in (the app validates its alpha against it) | push to `release/X.Y.Z` |
+| stable | `vX.Y.Z` | shipped — promoted from a beta by copying its artifact | merge to `main` |
+
+**Four workflows:** `ci.yml` (PR gate: lint/build/test), `alpha.yml`,
+`release-beta.yml`, and `promote.yml`.
+
+**Two non-negotiables:** (1) `main` never runs a failable build job — promotion
+*copies* the already-built beta artifact; (2) a genuinely-failable `lint` job
+(shellcheck + actionlint) gates every PR.
+
+> **Seam window.** The bridge language/runtime is not chosen yet, so the actual
+> build/test commands live behind a thin seam — `scripts/ci/build.sh` and
+> `scripts/ci/test.sh` are intentional no-ops today. While that holds, "green"
+> means **plumbing + lint pass, not build/test enforcement**, and alpha/beta/
+> stable releases are **tag-only** (no asset). When the bridge lands, only those
+> two scripts change — the pipeline stays. See `CLAUDE.md` and
+> [`docs/ci/rulesets.md`](docs/ci/rulesets.md).
+
 ## Related repos
 
 - [`sst-cam-app`](https://github.com/ScoutSportTechnology/sst-cam-app) — Flutter app; gains a socket `BleService` backend.

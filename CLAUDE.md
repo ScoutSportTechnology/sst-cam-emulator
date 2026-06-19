@@ -70,3 +70,65 @@ The two motivating cross-stack behaviors that must become end-to-end testable:
 The bridge language/runtime is deferred to planning (pick for socket + proto
 ergonomics; it is language-neutral). Update this file with build/run/test commands
 and the actual layout once they exist — until then there is nothing to build.
+
+## CI/CD & releasing
+
+Shared SST workflow standard — same branch model, maturity ladder, and tag
+scheme as `sst-cam-app`, `sst-cam-firmware`, and `sst-cam-proto`.
+
+### Branch flow
+
+```
+feat/* | fix/*  ──PR──►  develop  ──cut──►  release/X.Y.Z  ──PR──►  main
+```
+
+- `develop` — default branch; integration target for `feat/*`/`fix/*`.
+- `release/X.Y.Z` — release-candidate branch; betas iterate here.
+- `main` — stable; **never runs a failable build job**.
+
+### Maturity ladder + tags `vX.Y.Z[-alpha.N|-beta.N]`
+
+- **alpha** (`vX.Y.Z-alpha.N`) — build + automated tests in isolation. Minted on
+  every push to `develop`.
+- **beta** (`vX.Y.Z-beta.N`) — fidelity as a firmware stand-in; the app validates
+  its own alpha against this. Minted on pushes to `release/X.Y.Z`.
+- **stable** (`vX.Y.Z`) — shipped; promoted from the chosen beta by copying its
+  artifact, no rebuild.
+
+SemVer prerelease precedence: `-alpha.N` < `-beta.N` < stable. Conventional
+Commits drive the bump (`feat:` → minor, `fix:`/`perf:` → patch, `BREAKING`/
+`type!:` → major; docs/chore-only → mint nothing).
+
+### Four workflows
+
+- `.github/workflows/ci.yml` — PRs into `develop`/`release/*`: `lint`, `build`,
+  `test` (all three required checks).
+- `.github/workflows/alpha.yml` — push to `develop`: tag + publish `-alpha.N`.
+- `.github/workflows/release-beta.yml` — push to `release/*`: build + tag +
+  publish `-beta.N`.
+- `.github/workflows/promote.yml` — push to `main`: tag `vX.Y.Z` + **copy** the
+  beta artifact (no build step — the R3 guarantee).
+
+### Two non-negotiables
+
+1. **`main` never builds.** Promotion copies the already-built beta artifact;
+   there is no build step in `promote.yml`.
+2. **Green is meaningful.** A genuinely-failable `lint` job (shellcheck +
+   actionlint) gates every PR.
+
+### The `scripts/ci/` seam (bridge build/test lands here)
+
+- `scripts/ci/resolve-version.sh` — version math (alpha/beta/stable); tested by
+  `resolve-version-test.sh`. Do not duplicate this logic in YAML.
+- `scripts/ci/build.sh`, `scripts/ci/test.sh` — **intentional no-ops** until the
+  bridge language is chosen. The four workflows already call them. When the
+  bridge lands, **only these two scripts change** — the pipeline stays.
+
+**Seam-window meaning of "green":** while the bridge language is undecided,
+`build`/`test` are green-by-no-op and alpha/beta/promote are **tag-only** (no
+asset). "Green" means **plumbing + lint pass, NOT build/test enforcement**. The
+substantive failable gate today is `lint`. Do not misread a green pipeline as a
+finished/enforced build.
+
+Ruleset application (one-time maintainer runbook) is documented in
+[`docs/ci/rulesets.md`](docs/ci/rulesets.md).
