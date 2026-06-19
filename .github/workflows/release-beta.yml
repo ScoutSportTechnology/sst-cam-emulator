@@ -1,0 +1,73 @@
+name: release-beta
+
+# On every push to a release/X.Y.Z branch, build the artifact and mint the next
+# beta prerelease vX.Y.Z-beta.N. Betas iterate on the branch. This is the
+# artifact that promote.yml later copies to the stable Release (main never builds).
+#
+# SEAM WINDOW: scripts/ci/build.sh produces no artifact yet, so the beta is
+# TAG-ONLY (prerelease Release, no asset). The upload step is conditional on a
+# produced artifact under dist/ — same gate as alpha.yml. When the bridge fills
+# build.sh, the same step uploads the real artifact with no workflow change.
+#
+# Default GITHUB_TOKEN only (contents: write); the v* tag ruleset permits
+# compliant prerelease tag creation, so no PAT/App is needed.
+
+on:
+  push:
+    branches: [release/**]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  beta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Branch is release/X.Y.Z — derive the base and fail fast on a bad name.
+      - name: Derive release base
+        id: base
+        run: |
+          base="${GITHUB_REF_NAME#release/}"
+          if ! echo "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::branch '$GITHUB_REF_NAME' is not release/X.Y.Z"
+            exit 1
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve beta version
+        id: ver
+        run: ./scripts/ci/resolve-version.sh beta "${{ steps.base.outputs.base }}"
+
+      - name: Build beta artifact
+        run: ./scripts/ci/build.sh
+
+      - name: Create beta prerelease (tag-only during seam window)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --prerelease \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            --title "$TAG"
+
+      # Upload ONLY IF build.sh produced an artifact. During the seam window
+      # dist/ is empty, so this is skipped and the beta stays tag-only.
+      - name: Upload beta artifact (if produced)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(dist/*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No artifact produced (seam window) — beta $TAG is tag-only."
+            exit 0
+          fi
+          gh release upload "$TAG" "${assets[@]}" --clobber
