@@ -159,7 +159,7 @@ gh api repos/:owner/:repo/rulesets -X POST --input - <<'JSON'
   "name": "release branch protection",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["refs/heads/release/*"], "exclude": [] } },
+  "conditions": { "ref_name": { "include": ["refs/heads/release/**"], "exclude": [] } },
   "rules": [
     { "type": "deletion" },
     { "type": "non_fast_forward" },
