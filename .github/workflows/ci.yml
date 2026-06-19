@@ -1,0 +1,49 @@
+name: CI
+
+# PR gate for the SST Cam emulator. Runs on PRs into develop and release/*.
+# Three required checks: lint, build, test.
+#
+# SEAM WINDOW NOTE: the bridge language is not chosen yet, so scripts/ci/build.sh
+# and scripts/ci/test.sh are intentional no-ops (exit 0). That makes `build` and
+# `test` green-by-no-op for now — the genuinely-failable gate today is `lint`
+# (shellcheck + actionlint). "Green" here means plumbing + lint pass, NOT that
+# build/tests are enforced. When the bridge lands, the two seam scripts gain real
+# commands and build/test become substantive with no workflow change.
+
+on:
+  pull_request:
+    branches: [develop, release/**]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (shellcheck + actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # shellcheck ships preinstalled on ubuntu-latest runners.
+      - name: Shellcheck CI scripts
+        run: shellcheck scripts/ci/*.sh
+
+      # Pinned actionlint — the genuinely-failable workflow-YAML gate.
+      - name: Actionlint workflows
+        uses: raviqqe/[email protected]
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run build seam
+        run: ./scripts/ci/build.sh
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run test seam
+        run: ./scripts/ci/test.sh
