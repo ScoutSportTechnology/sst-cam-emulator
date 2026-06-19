@@ -1,12 +1,21 @@
-name: alpha
+name: release-alpha
 
-# On every push to develop (i.e. a merged PR), mint the next alpha prerelease.
-# Conventional-commit scan since the last stable tag decides the bump; a
-# docs/chore-only merge resolves released=false and mints nothing (expected,
-# not a failure).
+# Branch-scoped workflow that owns `develop`.
 #
-# SEAM WINDOW: scripts/ci/build.sh produces no artifact yet, so the alpha is
-# TAG-ONLY (prerelease Release, no asset). The upload step is conditional on a
+# PRs into develop run the three required CHECK jobs (lint/build/test). Pushes to
+# develop (merged PRs) mint the next alpha prerelease. The two paths share one
+# file but are mutually exclusive via event-name if-gates: checks run only on
+# pull_request, the alpha job runs only on push/dispatch.
+#
+# SEAM WINDOW NOTE: the bridge language is not chosen yet, so scripts/ci/build.sh
+# and scripts/ci/test.sh are intentional no-ops (exit 0). That makes `Build` and
+# `Test` green-by-no-op for now — the genuinely-failable gate today is `Lint`
+# (shellcheck + actionlint). "Green" here means plumbing + lint pass, NOT that
+# build/tests are enforced. When the bridge lands, the two seam scripts gain real
+# commands and build/test become substantive with no workflow change.
+#
+# SEAM WINDOW (alpha): scripts/ci/build.sh produces no artifact yet, so the alpha
+# is TAG-ONLY (prerelease Release, no asset). The upload step is conditional on a
 # produced artifact under dist/ — an unconditional upload of a nonexistent file
 # would fail the run, so it must stay gated. When the bridge fills build.sh, the
 # same step uploads the real artifact with no workflow change.
@@ -15,6 +24,8 @@ name: alpha
 # compliant prerelease tag creation, so no PAT/App is needed.
 
 on:
+  pull_request:
+    branches: [develop]
   push:
     branches: [develop]
   workflow_dispatch:
@@ -37,7 +48,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---- CHECK jobs: PR gate only. Job name: values are ruleset required-status-
+  # check contexts — do NOT rename them. ----
+  lint:
+    name: Lint (shellcheck + actionlint)
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # shellcheck ships preinstalled on ubuntu-latest runners.
+      - name: Shellcheck CI scripts
+        run: shellcheck scripts/ci/*.sh
+
+      # Pinned actionlint — the genuinely-failable workflow-YAML gate.
+      - name: Actionlint workflows
+        uses: raviqqe/[email protected]
+
+  build:
+    name: Build
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run build seam
+        run: ./scripts/ci/build.sh
+
+  test:
+    name: Test
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run test seam
+        run: ./scripts/ci/test.sh
+
+  # ---- Alpha release job: push to develop (merged PR) or manual dispatch. ----
   alpha:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
