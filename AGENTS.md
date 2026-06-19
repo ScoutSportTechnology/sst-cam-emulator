@@ -22,17 +22,17 @@ as `sst-cam-app`, `sst-cam-firmware`, and `sst-cam-proto`.
 ### Branch flow
 
 ```
-feat/* | fix/*  ──PR──►  develop  ──cut──►  release/X.Y.Z  ──PR──►  main
+feat/* | fix/*  ──PR──►  development  ──cut──►  release/X.Y.Z  ──PR──►  main
 ```
 
-- `develop` — default branch; target your `feat/*`/`fix/*` PRs here.
+- `development` — default branch; target your `feat/*`/`fix/*` PRs here.
 - `release/X.Y.Z` — release-candidate branch; betas iterate here.
 - `main` — stable; **never runs a failable build job**.
 
 ### Maturity ladder + tags `vX.Y.Z[-alpha.N|-beta.N]`
 
 - **alpha** (`vX.Y.Z-alpha.N`) — build + automated tests in isolation; minted on
-  push to `develop`.
+  push to `development`.
 - **beta** (`vX.Y.Z-beta.N`) — fidelity as a firmware stand-in (the app validates
   its alpha against it); minted on push to `release/X.Y.Z`.
 - **stable** (`vX.Y.Z`) — shipped; promoted from a beta by copying its artifact,
@@ -48,8 +48,8 @@ Each workflow owns one branch class and folds the PR gate (`Lint (shellcheck +
 actionlint)`/`Build`/`Test`) inline, gated to `pull_request`. There is **no
 standalone `ci.yml`**.
 
-- `.github/workflows/release-alpha.yml` (name `release-alpha`) — owns `develop`.
-  `pull_request: [develop]` runs the three gate checks; `push: [develop]` (+
+- `.github/workflows/release-alpha.yml` (name `release-alpha`) — owns `development`.
+  `pull_request: [development]` runs the three gate checks; `push: [development]` (+
   `workflow_dispatch`) tags + publishes `-alpha.N`.
 - `.github/workflows/release-beta.yml` (name `release-beta`) — owns `release/**`.
   `pull_request: [release/**]` runs the same three checks; `push: [release/**]`

@@ -1,12 +1,12 @@
 # Branch + tag rulesets — sst-cam-emulator
 
 > **APPLIED 2026-06-18.** These rulesets are now live on the repo: **Release
-> Tags**, **develop**, **main**, and **release-branches**, with **OrgAdmin
-> bypass**. `develop` requires the three checks `Lint (shellcheck + actionlint)`
+> Tags**, **development**, **main**, and **release-branches**, with **OrgAdmin
+> bypass**. `development` requires the three checks `Lint (shellcheck + actionlint)`
 > / `Build` / `Test`; `main`'s required checks are **deferred** (see the open
 > caveat below). The commands below are retained as the reference/runbook for how
 > they were applied and how to reapply or audit them. The PR gate now lives
-> inside `release-alpha.yml` (develop) and `release-beta.yml` (release/**), not a
+> inside `release-alpha.yml` (development) and `release-beta.yml` (release/**), not a
 > standalone `ci.yml`.
 
 **Maintainer runbook.** This file documents the intent and the exact `gh api`
@@ -22,13 +22,13 @@ tags yet, so every ruleset below is created fresh. There is no version reset.
 
 ## Ordering (strict)
 
-1. **Bootstrap (U0)** — cut `develop` from `main`, push it, flip the GitHub
-   default branch to `develop`:
+1. **Bootstrap (U0)** — cut `development` from `main`, push it, flip the GitHub
+   default branch to `development`:
    ```bash
-   git switch -c develop main && git push -u origin develop
-   gh api repos/:owner/:repo -X PATCH -f default_branch=develop
+   git switch -c development main && git push -u origin development
+   gh api repos/:owner/:repo -X PATCH -f default_branch=development
    ```
-2. **First CI run** — open one throwaway PR into `develop` so `release-alpha.yml`
+2. **First CI run** — open one throwaway PR into `development` so `release-alpha.yml`
    emits its three PR-gate check runs once. Capture the **exact** check-run names
    from that run — they are what `required_status_checks.contexts` must match.
    Based on the check-job names in `.github/workflows/release-alpha.yml` (and the
@@ -43,7 +43,7 @@ tags yet, so every ruleset below is created fresh. There is no version reset.
 
 ---
 
-## `develop` — integration branch
+## `development` — integration branch
 
 Intent: PR required, all three CI checks green before merge. Default target for
 `feat/*` and `fix/*`.
@@ -51,10 +51,10 @@ Intent: PR required, all three CI checks green before merge. Default target for
 ```bash
 gh api repos/:owner/:repo/rulesets -X POST --input - <<'JSON'
 {
-  "name": "develop protection",
+  "name": "development protection",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["refs/heads/develop"], "exclude": [] } },
+  "conditions": { "ref_name": { "include": ["refs/heads/development"], "exclude": [] } },
   "rules": [
     { "type": "deletion" },
     { "type": "non_fast_forward" },
@@ -94,7 +94,7 @@ delete. Admin/hotfix bypass only. `main` itself runs **no failable build job** �
 
 > **As applied (2026-06-18):** the `main` ruleset is live with PR + bypass, but
 > its **required status checks are deferred** (see the open caveat below) — they
-> are not yet wired as blocking on `main`. The `develop` and `release/**`
+> are not yet wired as blocking on `main`. The `development` and `release/**`
 > required checks are live.
 
 ```bash
@@ -228,7 +228,7 @@ JSON
 
 - Direct push to `main` is rejected.
 - A `release/* → main` PR with red required checks cannot merge (AE3).
-- `develop` is the repo default branch.
+- `development` is the repo default branch.
 - Attempting to delete or move a `v*` tag is rejected.
 
 ## Seam-window note

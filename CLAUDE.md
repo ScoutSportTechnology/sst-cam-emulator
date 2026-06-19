@@ -79,17 +79,17 @@ scheme as `sst-cam-app`, `sst-cam-firmware`, and `sst-cam-proto`.
 ### Branch flow
 
 ```
-feat/* | fix/*  ──PR──►  develop  ──cut──►  release/X.Y.Z  ──PR──►  main
+feat/* | fix/*  ──PR──►  development  ──cut──►  release/X.Y.Z  ──PR──►  main
 ```
 
-- `develop` — default branch; integration target for `feat/*`/`fix/*`.
+- `development` — default branch; integration target for `feat/*`/`fix/*`.
 - `release/X.Y.Z` — release-candidate branch; betas iterate here.
 - `main` — stable; **never runs a failable build job**.
 
 ### Maturity ladder + tags `vX.Y.Z[-alpha.N|-beta.N]`
 
 - **alpha** (`vX.Y.Z-alpha.N`) — build + automated tests in isolation. Minted on
-  every push to `develop`.
+  every push to `development`.
 - **beta** (`vX.Y.Z-beta.N`) — fidelity as a firmware stand-in; the app validates
   its own alpha against this. Minted on pushes to `release/X.Y.Z`.
 - **stable** (`vX.Y.Z`) — shipped; promoted from the chosen beta by copying its
@@ -105,8 +105,8 @@ Each workflow owns one branch class and folds the PR gate (`Lint (shellcheck +
 actionlint)`/`Build`/`Test`) inline, gated to `pull_request`. There is **no
 standalone `ci.yml`** — the checks live inside the alpha/beta workflows.
 
-- `.github/workflows/release-alpha.yml` (name `release-alpha`) — owns `develop`.
-  `pull_request: [develop]` runs the three gate checks; `push: [develop]` (+
+- `.github/workflows/release-alpha.yml` (name `release-alpha`) — owns `development`.
+  `pull_request: [development]` runs the three gate checks; `push: [development]` (+
   `workflow_dispatch`) tags + publishes `-alpha.N`.
 - `.github/workflows/release-beta.yml` (name `release-beta`) — owns `release/**`.
   `pull_request: [release/**]` runs the same three gate checks; `push:
@@ -144,22 +144,22 @@ Ruleset application (one-time maintainer runbook) is documented in
 
 ## Release lifecycle
 
-The version ladder is driven by **which branch you push to**, not by counters. Tags climb `vX.Y.Z-alpha.N` (develop) → `vX.Y.Z-beta.N` (release/*) → `vX.Y.Z` (main); the math lives in `scripts/ci/resolve-version.sh`.
+The version ladder is driven by **which branch you push to**, not by counters. Tags climb `vX.Y.Z-alpha.N` (development) → `vX.Y.Z-beta.N` (release/*) → `vX.Y.Z` (main); the math lives in `scripts/ci/resolve-version.sh`.
 
-**Alpha — automatic, every `develop` merge.** `release-alpha.yml` runs `resolve-version.sh alpha`: the base is a Conventional-Commit bump from the latest *stable* tag (or from `v0.0.0` when none exists), and `-alpha.N` increments per merge.
+**Alpha — automatic, every `development` merge.** `release-alpha.yml` runs `resolve-version.sh alpha`: the base is a Conventional-Commit bump from the latest *stable* tag (or from `v0.0.0` when none exists), and `-alpha.N` increments per merge.
 
 ```
-feat A → develop   →  v0.1.0-alpha.1
-feat B → develop   →  v0.1.0-alpha.2
-feat C → develop   →  v0.1.0-alpha.3
+feat A → development   →  v0.1.0-alpha.1
+feat B → development   →  v0.1.0-alpha.2
+feat C → development   →  v0.1.0-alpha.3
 ```
 
 With no stable tag yet, a `feat:` yields base `0.1.0` (a `feat!:`/`BREAKING CHANGE` → `1.0.0`; a `fix:`-only → `0.0.1`); docs/chore-only mints nothing.
 
-**Beta — when you cut the release branch.** Manually branch `release/X.Y.Z` off `develop` and push it; `release-beta.yml` runs `resolve-version.sh beta X.Y.Z` (base = the branch name):
+**Beta — when you cut the release branch.** Manually branch `release/X.Y.Z` off `development` and push it; `release-beta.yml` runs `resolve-version.sh beta X.Y.Z` (base = the branch name):
 
 ```
-git switch -c release/0.1.0 develop && git push   →  v0.1.0-beta.1
+git switch -c release/0.1.0 development && git push   →  v0.1.0-beta.1
 ```
 
 Each subsequent push to that branch bumps the beta counter — `-beta.2`, `-beta.3`, … This is the rung validated as a **faithful firmware stand-in the app runs against**. Alpha and beta are independent counters.
@@ -167,11 +167,11 @@ Each subsequent push to that branch bumps the beta counter — `-beta.2`, `-beta
 **Stable — when you merge `release/X.Y.Z → main`.** Pushing the branch *creates* the betas; **merging it to `main` promotes the latest beta to stable.** `release.yml` auto-selects the highest `vX.Y.Z-beta.N`, tags `vX.Y.Z`, and copies the beta artifact to the stable Release — no build on `main`. (During the seam window the build/test scripts are no-ops, so alpha/beta/stable are **tag-only** until the bridge build lands.)
 
 ```
-develop:        alpha.1   alpha.2   alpha.3
+development:    alpha.1   alpha.2   alpha.3
                                        │ cut release/0.1.0
 release/0.1.0:                         └─► beta.1 → beta.2 → beta.3
                                                               │ merge → main
 main:                                                         └─► v0.1.0  (stable)
 ```
 
-After `v0.1.0` stable exists, the next `feat:` on `develop` bumps from the latest stable → `v0.2.0-alpha.1` (a `fix:` → `v0.1.1-alpha.1`). The alpha base climbs only once a stable is cut.
+After `v0.1.0` stable exists, the next `feat:` on `development` bumps from the latest stable → `v0.2.0-alpha.1` (a `fix:` → `v0.1.1-alpha.1`). The alpha base climbs only once a stable is cut.

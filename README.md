@@ -51,13 +51,13 @@ socket backend lives in **`sst-cam-app`** — both tracked in those repos.
 This repo follows the shared SST workflow standard (same branch model, maturity
 ladder, and tag scheme as `sst-cam-app`, `sst-cam-firmware`, and `sst-cam-proto`).
 
-**Branch flow:** `feat/* | fix/*` → `develop` → `release/X.Y.Z` → `main`.
+**Branch flow:** `feat/* | fix/*` → `development` → `release/X.Y.Z` → `main`.
 
 **Maturity ladder** (tags `vX.Y.Z[-alpha.N|-beta.N]`):
 
 | Rung | Tag | Meaning | Minted on |
 | ---- | --- | ------- | --------- |
-| alpha | `vX.Y.Z-alpha.N` | build + automated tests in isolation | push to `develop` |
+| alpha | `vX.Y.Z-alpha.N` | build + automated tests in isolation | push to `development` |
 | beta | `vX.Y.Z-beta.N` | fidelity as a firmware stand-in (the app validates its alpha against it) | push to `release/X.Y.Z` |
 | stable | `vX.Y.Z` | shipped — promoted from a beta by copying its artifact | merge to `main` |
 
@@ -65,7 +65,7 @@ ladder, and tag scheme as `sst-cam-app`, `sst-cam-firmware`, and `sst-cam-proto`
 gate (`Lint (shellcheck + actionlint)`/`Build`/`Test`) inline, gated to
 `pull_request`; there is no standalone `ci.yml`:
 
-- `release-alpha.yml` — owns `develop`: PRs into `develop` run the three checks;
+- `release-alpha.yml` — owns `development`: PRs into `development` run the three checks;
   pushes tag + publish `-alpha.N`.
 - `release-beta.yml` — owns `release/**`: PRs into `release/*` run the same
   checks; pushes tag + publish `-beta.N`.

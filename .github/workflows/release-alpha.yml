@@ -1,9 +1,9 @@
 name: release-alpha
 
-# Branch-scoped workflow that owns `develop`.
+# Branch-scoped workflow that owns `development`.
 #
-# PRs into develop run the three required CHECK jobs (lint/build/test). Pushes to
-# develop (merged PRs) mint the next alpha prerelease. The two paths share one
+# PRs into development run the three required CHECK jobs (lint/build/test). Pushes to
+# development (merged PRs) mint the next alpha prerelease. The two paths share one
 # file but are mutually exclusive via event-name if-gates: checks run only on
 # pull_request, the alpha job runs only on push/dispatch.
 #
@@ -25,9 +25,9 @@ name: release-alpha
 
 on:
   pull_request:
-    branches: [develop]
+    branches: [development]
   push:
-    branches: [develop]
+    branches: [development]
   workflow_dispatch:
     inputs:
       version:
@@ -83,7 +83,7 @@ jobs:
       - name: Run test seam
         run: ./scripts/ci/test.sh
 
-  # ---- Alpha release job: push to develop (merged PR) or manual dispatch. ----
+  # ---- Alpha release job: push to development (merged PR) or manual dispatch. ----
   alpha:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
