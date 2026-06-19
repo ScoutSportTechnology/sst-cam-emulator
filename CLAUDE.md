@@ -141,3 +141,37 @@ finished/enforced build.
 
 Ruleset application (one-time maintainer runbook) is documented in
 [`docs/ci/rulesets.md`](docs/ci/rulesets.md).
+
+## Release lifecycle
+
+The version ladder is driven by **which branch you push to**, not by counters. Tags climb `vX.Y.Z-alpha.N` (develop) → `vX.Y.Z-beta.N` (release/*) → `vX.Y.Z` (main); the math lives in `scripts/ci/resolve-version.sh`.
+
+**Alpha — automatic, every `develop` merge.** `release-alpha.yml` runs `resolve-version.sh alpha`: the base is a Conventional-Commit bump from the latest *stable* tag (or from `v0.0.0` when none exists), and `-alpha.N` increments per merge.
+
+```
+feat A → develop   →  v0.1.0-alpha.1
+feat B → develop   →  v0.1.0-alpha.2
+feat C → develop   →  v0.1.0-alpha.3
+```
+
+With no stable tag yet, a `feat:` yields base `0.1.0` (a `feat!:`/`BREAKING CHANGE` → `1.0.0`; a `fix:`-only → `0.0.1`); docs/chore-only mints nothing.
+
+**Beta — when you cut the release branch.** Manually branch `release/X.Y.Z` off `develop` and push it; `release-beta.yml` runs `resolve-version.sh beta X.Y.Z` (base = the branch name):
+
+```
+git switch -c release/0.1.0 develop && git push   →  v0.1.0-beta.1
+```
+
+Each subsequent push to that branch bumps the beta counter — `-beta.2`, `-beta.3`, … This is the rung validated as a **faithful firmware stand-in the app runs against**. Alpha and beta are independent counters.
+
+**Stable — when you merge `release/X.Y.Z → main`.** Pushing the branch *creates* the betas; **merging it to `main` promotes the latest beta to stable.** `release.yml` auto-selects the highest `vX.Y.Z-beta.N`, tags `vX.Y.Z`, and copies the beta artifact to the stable Release — no build on `main`. (During the seam window the build/test scripts are no-ops, so alpha/beta/stable are **tag-only** until the bridge build lands.)
+
+```
+develop:        alpha.1   alpha.2   alpha.3
+                                       │ cut release/0.1.0
+release/0.1.0:                         └─► beta.1 → beta.2 → beta.3
+                                                              │ merge → main
+main:                                                         └─► v0.1.0  (stable)
+```
+
+After `v0.1.0` stable exists, the next `feat:` on `develop` bumps from the latest stable → `v0.2.0-alpha.1` (a `fix:` → `v0.1.1-alpha.1`). The alpha base climbs only once a stable is cut.
