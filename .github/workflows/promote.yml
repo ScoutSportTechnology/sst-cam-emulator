@@ -25,6 +25,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
 jobs:
   promote:
     runs-on: ubuntu-latest
@@ -40,15 +44,21 @@ jobs:
         env:
           IN_VERSION: ${{ inputs.version }}
         run: |
-          base="$IN_VERSION"
-          if [ -z "$base" ]; then
-            subject="$(git log -1 --format='%s%n%b')"
-            base="$(echo "$subject" | grep -oE 'release/[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's#release/##')"
+          set -euo pipefail
+          base=""
+          if [ -n "${IN_VERSION:-}" ]; then
+            base="${IN_VERSION#v}"
+          else
+            base="$(git log -1 --format='%s%n%b' "$GITHUB_SHA" \
+              | grep -oE 'release/[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's#release/##' || true)"
+            if [ -z "$base" ]; then
+              cand="$(git tag --merged "$GITHUB_SHA" -l 'v*-beta.*' --sort=-v:refname \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' | head -1 || true)"
+              cand="${cand#v}"; base="${cand%-beta.*}"
+            fi
           fi
-          if ! echo "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::could not derive release/X.Y.Z version from the merge (set the 'version' input to override)"
-            exit 1
-          fi
+          echo "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::cannot derive X.Y.Z under promotion (squash merge? pass workflow_dispatch version=vX.Y.Z)"; exit 1; }
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
       # Select the newest beta TAG for this version. Missing beta tag => fail fast
@@ -73,10 +83,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          gh release create "$TAG" \
-            --generate-notes \
-            --target "$GITHUB_SHA" \
-            --title "$TAG"
+          set -euo pipefail
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" \
+                 --generate-notes \
+                 --target "$GITHUB_SHA" \
+                 --title "$TAG"
 
       # If the beta Release carries an asset, download + re-upload it to the
       # stable Release (bytes preserved, -beta.N renamed to stable). If the beta
@@ -89,14 +101,15 @@ jobs:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           set -euo pipefail
-          mkdir -p incoming staged
-          gh release download "$BETA" --dir incoming || true
-          shopt -s nullglob
-          assets=(incoming/*)
-          if [ ${#assets[@]} -eq 0 ]; then
+          count="$(gh release view "$BETA" --json assets --jq '.assets | length')"
+          if [ "$count" -eq 0 ]; then
             echo "Beta $BETA carries no asset (seam window) — stable $TAG is tag-only."
             exit 0
           fi
+          mkdir -p incoming staged
+          gh release download "$BETA" --dir incoming   # no '|| true' — a real failure must fail the run
+          shopt -s nullglob
+          assets=(incoming/*)
           for f in "${assets[@]}"; do
             name="$(basename "$f")"
             renamed="${name//$BETA/$TAG}"
