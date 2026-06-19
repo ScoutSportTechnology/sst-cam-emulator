@@ -1,4 +1,4 @@
-name: promote
+name: release
 
 # On push to main (a merged release/X.Y.Z PR), tag the stable vX.Y.Z and publish
 # the ALREADY-BUILT beta artifact by copying it — bytes preserved, renamed
