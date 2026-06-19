@@ -1,13 +1,22 @@
 # Branch + tag rulesets — sst-cam-emulator
 
+> **APPLIED 2026-06-18.** These rulesets are now live on the repo: **Release
+> Tags**, **develop**, **main**, and **release-branches**, with **OrgAdmin
+> bypass**. `develop` requires the three checks `Lint (shellcheck + actionlint)`
+> / `Build` / `Test`; `main`'s required checks are **deferred** (see the open
+> caveat below). The commands below are retained as the reference/runbook for how
+> they were applied and how to reapply or audit them. The PR gate now lives
+> inside `release-alpha.yml` (develop) and `release-beta.yml` (release/**), not a
+> standalone `ci.yml`.
+
 **Maintainer runbook.** This file documents the intent and the exact `gh api`
 calls to apply the GitHub rulesets that enforce the SST Cam workflow standard in
 this repo. It is **not** executed by CI — a maintainer/admin runs these once,
 after the bootstrap (U0) and after the workflows have produced their check runs
 once so the required-status-check names are known.
 
-This repo is **greenfield**: it has no rulesets and no tags yet, so every ruleset
-below is created fresh. There is no version reset.
+This repo was **greenfield** when this runbook was written: no rulesets and no
+tags yet, so every ruleset below is created fresh. There is no version reset.
 
 ---
 
@@ -19,10 +28,11 @@ below is created fresh. There is no version reset.
    git switch -c develop main && git push -u origin develop
    gh api repos/:owner/:repo -X PATCH -f default_branch=develop
    ```
-2. **First CI run** — open one throwaway PR into `develop` so `ci.yml` emits its
-   three check runs once. Capture the **exact** check-run names from that run —
-   they are what `required_status_checks.contexts` must match. Based on the job
-   names in `.github/workflows/ci.yml` they are expected to be:
+2. **First CI run** — open one throwaway PR into `develop` so `release-alpha.yml`
+   emits its three PR-gate check runs once. Capture the **exact** check-run names
+   from that run — they are what `required_status_checks.contexts` must match.
+   Based on the check-job names in `.github/workflows/release-alpha.yml` (and the
+   identical ones in `release-beta.yml`) they are:
    - `Lint (shellcheck + actionlint)`
    - `Build`
    - `Test`
@@ -80,7 +90,12 @@ JSON
 
 Intent: PR required, the same three CI checks green, no direct push / force-push /
 delete. Admin/hotfix bypass only. `main` itself runs **no failable build job** —
-`promote.yml` only tags + copies the already-built beta asset.
+`release.yml` only tags + copies the already-built beta asset.
+
+> **As applied (2026-06-18):** the `main` ruleset is live with PR + bypass, but
+> its **required status checks are deferred** (see the open caveat below) — they
+> are not yet wired as blocking on `main`. The `develop` and `release/**`
+> required checks are live.
 
 ```bash
 gh api repos/:owner/:repo/rulesets -X POST --input - <<'JSON'
@@ -128,9 +143,9 @@ or the org roles API to confirm).
 ### Open caveat — reusing the release-branch checks on the `main` PR
 
 A `release/X.Y.Z → main` PR's head SHA is the release-branch head, which already
-ran `ci.yml` green (PRs into `release/*` trigger `ci.yml` — see U3). The intent is
-for GitHub to **surface those already-green check runs on the main PR head SHA**
-rather than re-running anything.
+ran the gate checks green (PRs into `release/*` trigger `release-beta.yml`'s
+`pull_request` checks — see U3). The intent is for GitHub to **surface those
+already-green check runs on the main PR head SHA** rather than re-running anything.
 
 **This is unverified and left open.** GitHub does not always surface a prior
 commit's check runs against a new PR context reliably. If the main PR shows the
@@ -139,9 +154,14 @@ required checks as missing/pending despite the release branch being green:
 - **Option A (preferred):** confirm GitHub reuses the head-SHA check runs once a
   real release PR exists, then keep this config as-is.
 - **Option B (fallback):** add a lightweight `pull_request.branches: [main]`
-  no-build assertion job to `ci.yml` (or a dedicated workflow) that re-emits the
-  three check contexts on the main PR head without building — preserving the
-  "main never builds" guarantee while giving the ruleset a check to gate on.
+  no-build assertion job (e.g. to `release.yml` or a dedicated workflow) that
+  re-emits the three check contexts on the main PR head without building —
+  preserving the "main never builds" guarantee while giving the ruleset a check
+  to gate on.
+
+> This is the reason `main`'s required checks are **deferred** in the live config
+> (noted under the `main` section above) — they will be wired once the first
+> release PR settles which option holds.
 
 Do not resolve this by adding a build step to the main path. Flagged here for the
 maintainer to settle when the first release PR is cut.

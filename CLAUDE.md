@@ -99,20 +99,29 @@ SemVer prerelease precedence: `-alpha.N` < `-beta.N` < stable. Conventional
 Commits drive the bump (`feat:` → minor, `fix:`/`perf:` → patch, `BREAKING`/
 `type!:` → major; docs/chore-only → mint nothing).
 
-### Four workflows
+### Three branch-scoped workflows
 
-- `.github/workflows/ci.yml` — PRs into `develop`/`release/*`: `lint`, `build`,
-  `test` (all three required checks).
-- `.github/workflows/alpha.yml` — push to `develop`: tag + publish `-alpha.N`.
-- `.github/workflows/release-beta.yml` — push to `release/*`: build + tag +
-  publish `-beta.N`.
-- `.github/workflows/promote.yml` — push to `main`: tag `vX.Y.Z` + **copy** the
-  beta artifact (no build step — the R3 guarantee).
+Each workflow owns one branch class and folds the PR gate (`Lint (shellcheck +
+actionlint)`/`Build`/`Test`) inline, gated to `pull_request`. There is **no
+standalone `ci.yml`** — the checks live inside the alpha/beta workflows.
+
+- `.github/workflows/release-alpha.yml` (name `release-alpha`) — owns `develop`.
+  `pull_request: [develop]` runs the three gate checks; `push: [develop]` (+
+  `workflow_dispatch`) tags + publishes `-alpha.N`.
+- `.github/workflows/release-beta.yml` (name `release-beta`) — owns `release/**`.
+  `pull_request: [release/**]` runs the same three gate checks; `push:
+  [release/**]` tags + publishes `-beta.N`.
+- `.github/workflows/release.yml` (name `release`) — owns `main`. `push: [main]`
+  promotes (tag `vX.Y.Z` + **copy** the beta artifact). No checks, no build —
+  main never builds.
+
+The PR-gate job names are unchanged (`Lint (shellcheck + actionlint)` / `Build` /
+`Test`), so the rulesets that require them are unaffected by the consolidation.
 
 ### Two non-negotiables
 
 1. **`main` never builds.** Promotion copies the already-built beta artifact;
-   there is no build step in `promote.yml`.
+   there is no build step in `release.yml`.
 2. **Green is meaningful.** A genuinely-failable `lint` job (shellcheck +
    actionlint) gates every PR.
 
@@ -121,11 +130,11 @@ Commits drive the bump (`feat:` → minor, `fix:`/`perf:` → patch, `BREAKING`/
 - `scripts/ci/resolve-version.sh` — version math (alpha/beta/stable); tested by
   `resolve-version-test.sh`. Do not duplicate this logic in YAML.
 - `scripts/ci/build.sh`, `scripts/ci/test.sh` — **intentional no-ops** until the
-  bridge language is chosen. The four workflows already call them. When the
-  bridge lands, **only these two scripts change** — the pipeline stays.
+  bridge language is chosen. The workflows already call them. When the bridge
+  lands, **only these two scripts change** — the pipeline stays.
 
 **Seam-window meaning of "green":** while the bridge language is undecided,
-`build`/`test` are green-by-no-op and alpha/beta/promote are **tag-only** (no
+`build`/`test` are green-by-no-op and alpha/beta/promotion are **tag-only** (no
 asset). "Green" means **plumbing + lint pass, NOT build/test enforcement**. The
 substantive failable gate today is `lint`. Do not misread a green pipeline as a
 finished/enforced build.

@@ -42,20 +42,28 @@ Precedence `-alpha.N` < `-beta.N` < stable. Use **Conventional Commits** — the
 source (`feat:` → minor, `fix:`/`perf:` → patch, `BREAKING`/`type!:` → major;
 docs/chore-only mints nothing).
 
-### Four workflows
+### Three branch-scoped workflows
 
-- `.github/workflows/ci.yml` — PRs into `develop`/`release/*`: `lint`, `build`,
-  `test` (all required checks).
-- `.github/workflows/alpha.yml` — push to `develop`: tag + publish `-alpha.N`.
-- `.github/workflows/release-beta.yml` — push to `release/*`: build + tag +
-  publish `-beta.N`.
-- `.github/workflows/promote.yml` — push to `main`: tag `vX.Y.Z` + **copy** the
-  beta artifact (no build step).
+Each workflow owns one branch class and folds the PR gate (`Lint (shellcheck +
+actionlint)`/`Build`/`Test`) inline, gated to `pull_request`. There is **no
+standalone `ci.yml`**.
+
+- `.github/workflows/release-alpha.yml` (name `release-alpha`) — owns `develop`.
+  `pull_request: [develop]` runs the three gate checks; `push: [develop]` (+
+  `workflow_dispatch`) tags + publishes `-alpha.N`.
+- `.github/workflows/release-beta.yml` (name `release-beta`) — owns `release/**`.
+  `pull_request: [release/**]` runs the same three checks; `push: [release/**]`
+  tags + publishes `-beta.N`.
+- `.github/workflows/release.yml` (name `release`) — owns `main`. `push: [main]`
+  promotes: tag `vX.Y.Z` + **copy** the beta artifact. No checks, no build.
+
+Job names are unchanged (`Lint (shellcheck + actionlint)` / `Build` / `Test`), so
+the required-status-check rulesets are unaffected.
 
 ### Two non-negotiables
 
 1. **`main` never builds.** Promotion copies the already-built beta artifact.
-   Never add a build step to `promote.yml` or the main path.
+   Never add a build step to `release.yml` or the main path.
 2. **Green is meaningful.** A failable `lint` job (shellcheck + actionlint) gates
    every PR.
 
@@ -70,7 +78,7 @@ The bridge build/test commands land here when the language is chosen:
   scripts** — the pipeline stays.
 
 **Seam-window meaning of "green":** while the bridge language is undecided,
-`build`/`test` are green-by-no-op and alpha/beta/promote are **tag-only** (no
+`build`/`test` are green-by-no-op and alpha/beta/promotion are **tag-only** (no
 asset). Green means **plumbing + lint pass, NOT build/test enforcement**. The
 substantive failable gate today is `lint`.
 
