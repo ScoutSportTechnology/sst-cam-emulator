@@ -1,0 +1,105 @@
+name: promote
+
+# On push to main (a merged release/X.Y.Z PR), tag the stable vX.Y.Z and publish
+# the ALREADY-BUILT beta artifact by copying it — bytes preserved, renamed
+# -beta.N -> stable. There is NO build step anywhere in this workflow: that is
+# the R3/AE4 guarantee that main never runs a failable build/publish job.
+#
+# Fail-fast applies ONLY to a missing beta TAG (never silently rebuild). A beta
+# that carries no asset (the seam window, where build.sh produced nothing) is the
+# documented-skip path: the stable Release is tag-only too, and the run stays green.
+#
+# Default GITHUB_TOKEN only (contents: write); the v* tag ruleset permits
+# compliant stable tag creation.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to promote eg 0.1.0 (overrides branch detection)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Derive X.Y.Z from the merged release/X.Y.Z branch. The merge commit
+      # subject names the source branch; manual dispatch can override.
+      - name: Derive version
+        id: base
+        env:
+          IN_VERSION: ${{ inputs.version }}
+        run: |
+          base="$IN_VERSION"
+          if [ -z "$base" ]; then
+            subject="$(git log -1 --format='%s%n%b')"
+            base="$(echo "$subject" | grep -oE 'release/[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's#release/##')"
+          fi
+          if ! echo "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::could not derive release/X.Y.Z version from the merge (set the 'version' input to override)"
+            exit 1
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      # Select the newest beta TAG for this version. Missing beta tag => fail fast
+      # (never silently rebuild on main).
+      - name: Select source beta tag
+        id: beta
+        run: |
+          base="${{ steps.base.outputs.base }}"
+          beta="$(git tag -l "v${base}-beta.*" --sort=-v:refname | head -1)"
+          if [ -z "$beta" ]; then
+            echo "::error::no beta tag found for v${base} — refusing to promote (main never builds)"
+            exit 1
+          fi
+          echo "beta=$beta" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve stable version
+        id: ver
+        run: ./scripts/ci/resolve-version.sh stable "${{ steps.base.outputs.base }}"
+
+      - name: Create stable Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            --title "$TAG"
+
+      # If the beta Release carries an asset, download + re-upload it to the
+      # stable Release (bytes preserved, -beta.N renamed to stable). If the beta
+      # is tag-only (seam window), this is the documented-skip path: stable stays
+      # tag-only and the run is green. NO build occurs here.
+      - name: Copy beta asset to stable (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BETA: ${{ steps.beta.outputs.beta }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p incoming staged
+          gh release download "$BETA" --dir incoming || true
+          shopt -s nullglob
+          assets=(incoming/*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "Beta $BETA carries no asset (seam window) — stable $TAG is tag-only."
+            exit 0
+          fi
+          for f in "${assets[@]}"; do
+            name="$(basename "$f")"
+            renamed="${name//$BETA/$TAG}"
+            cp "$f" "staged/$renamed"
+          done
+          gh release upload "$TAG" staged/* --clobber
