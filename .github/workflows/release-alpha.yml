@@ -63,7 +63,7 @@ jobs:
 
       # Pinned actionlint — the genuinely-failable workflow-YAML gate.
       - name: Actionlint workflows
-        uses: raviqqe/[email protected]
+        uses: reviewdog/action-actionlint@v1.72.0
 
   build:
     name: Build
